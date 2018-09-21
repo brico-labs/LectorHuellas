@@ -304,21 +304,21 @@ void setup()
 
 void loop()                     // run over and over again
 {
-  File f;
-  if (digitalRead(D5) == LOW) {
-    finger.getTemplateCount();
-    fingerprintEnroll(finger.templateCount);
-  }
-
   int code = getFingerprintID();
 
   if (!code) {
     Serial.println("Fingerprint id: " + finger.fingerID);
-    digitalWrite(DOOR, HIGH);
-    digitalWrite(GREEN_LED, HIGH);
-    delay(1000);
-    digitalWrite(GREEN_LED, LOW);
-    digitalWrite(DOOR, LOW);
+    if (digitalRead(D5) == LOW && finger.fingerID < 2) {
+      finger.getTemplateCount();
+      fingerprintEnroll(finger.templateCount);
+    }
+    else {
+      digitalWrite(DOOR, HIGH);
+      digitalWrite(GREEN_LED, HIGH);
+      delay(1000);
+      digitalWrite(GREEN_LED, LOW);
+      digitalWrite(DOOR, LOW);
+    }
   } 
   
   if (code == FINGERPRINT_NOTFOUND) {
