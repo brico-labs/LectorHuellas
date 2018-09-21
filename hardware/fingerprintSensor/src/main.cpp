@@ -26,7 +26,12 @@
 // pin #3 is OUT from arduino  (WHITE wire)
 // comment these two lines if using hardware serial
 #include <SoftwareSerial.h>
+#include <FS.h>
+
 SoftwareSerial mySerial(D3, D4);
+const short RED_LED = D6;
+const short GREEN_LED = D7;
+const short DOOR = D2;
 
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 uint8_t getFingerprintID() {
@@ -92,7 +97,7 @@ uint8_t getFingerprintID() {
   Serial.print("Found ID #"); Serial.print(finger.fingerID); 
   Serial.print(" with confidence of "); Serial.println(finger.confidence); 
 
-  return finger.fingerID;
+  return 0;
 }
 
 int8_t wait4Finger(){
@@ -155,9 +160,33 @@ int8_t trainModel(uint8_t n){
   }
 }
 
+void blink_both(){
+  digitalWrite(GREEN_LED, LOW);
+  digitalWrite(RED_LED, LOW);
+  delay(200);
+  digitalWrite(GREEN_LED, HIGH);
+  digitalWrite(RED_LED, HIGH);
+  delay(200);
+  digitalWrite(GREEN_LED, LOW);
+  digitalWrite(RED_LED, LOW);
+  delay(200);
+  digitalWrite(GREEN_LED, HIGH);
+  digitalWrite(RED_LED, HIGH);
+  delay(200);
+  digitalWrite(GREEN_LED, LOW);
+  digitalWrite(RED_LED, LOW);
+  delay(200);
+  digitalWrite(GREEN_LED, HIGH);
+  digitalWrite(RED_LED, HIGH);
+  delay(200);
+  digitalWrite(GREEN_LED, LOW);
+  digitalWrite(RED_LED, LOW);
+}
+
 uint8_t fingerprintEnroll(uint8_t id) {
   Serial.print("Waiting for valid finger to enroll as #"); Serial.println(id);
-  
+  blink_both();
+
   if (wait4Finger() < 0) {
     return -1;
   }
@@ -166,11 +195,12 @@ uint8_t fingerprintEnroll(uint8_t id) {
   if (trainModel(1) < 0) {
     return -1;
   }
-    
-  
   
   Serial.println("Remove finger");
-  delay(2000);
+  digitalWrite(GREEN_LED, HIGH);
+  delay(1000);
+  blink_both();
+
   int p = 0;
   while (p != FINGERPRINT_NOFINGER) {
     p = finger.getImage();
@@ -205,6 +235,9 @@ uint8_t fingerprintEnroll(uint8_t id) {
   p = finger.storeModel(id);
   if (p == FINGERPRINT_OK) {
     Serial.println("Stored!");
+    digitalWrite(GREEN_LED, HIGH);
+    delay(1000);
+    digitalWrite(GREEN_LED, LOW);
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
     return p;
@@ -245,12 +278,17 @@ uint8_t deleteFingerprint(uint8_t id) {
 void setup()  
 {
   Serial.begin(9600);
+  SPIFFS.begin();
   while (!Serial);  // For Yun/Leo/Micro/Zero/...
   delay(100);
   Serial.println("\n\nAdafruit finger detect test");
 
   // set the data rate for the sensor serial port
   finger.begin(115200);
+
+  pinMode(D5, INPUT_PULLUP);
+  pinMode(GREEN_LED, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
   
   if (finger.verifyPassword()) {
     Serial.println("Found fingerprint sensor!");
@@ -266,8 +304,29 @@ void setup()
 
 void loop()                     // run over and over again
 {
-  //fingerprintEnroll(2);
-  getFingerprintID();
+  File f;
+  if (digitalRead(D5) == LOW) {
+    finger.getTemplateCount();
+    fingerprintEnroll(finger.templateCount);
+  }
+
+  int code = getFingerprintID();
+
+  if (!code) {
+    Serial.println("Fingerprint id: " + finger.fingerID);
+    digitalWrite(DOOR, HIGH);
+    digitalWrite(GREEN_LED, HIGH);
+    delay(1000);
+    digitalWrite(GREEN_LED, LOW);
+    digitalWrite(DOOR, LOW);
+  } 
+  
+  if (code == FINGERPRINT_NOTFOUND) {
+    digitalWrite(RED_LED, HIGH);
+    delay(1000);
+    digitalWrite(RED_LED, LOW);
+  }
+
   delay(50);            //don't ned to run this at full speed.
 }
 
