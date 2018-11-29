@@ -289,6 +289,7 @@ void setup()
   pinMode(D5, INPUT_PULLUP);
   pinMode(GREEN_LED, OUTPUT);
   pinMode(RED_LED, OUTPUT);
+  pinMode(DOOR, OUTPUT);
   
   if (finger.verifyPassword()) {
     Serial.println("Found fingerprint sensor!");
@@ -307,10 +308,11 @@ void loop()                     // run over and over again
   int code = getFingerprintID();
 
   if (!code) {
-    Serial.println("Fingerprint id: " + finger.fingerID);
+    Serial.print("Fingerprint id: ");
+    Serial.println(finger.fingerID);
     if (digitalRead(D5) == LOW && finger.fingerID < 2) {
-      finger.getTemplateCount();
-      fingerprintEnroll(finger.templateCount);
+        finger.getTemplateCount();
+        fingerprintEnroll(finger.templateCount);
     }
     else {
       digitalWrite(DOOR, HIGH);
@@ -320,7 +322,7 @@ void loop()                     // run over and over again
       digitalWrite(DOOR, LOW);
     }
   } 
-  
+
   if (code == FINGERPRINT_NOTFOUND) {
     digitalWrite(RED_LED, HIGH);
     delay(1000);
