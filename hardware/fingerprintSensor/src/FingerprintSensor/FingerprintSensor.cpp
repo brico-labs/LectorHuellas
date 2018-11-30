@@ -1,6 +1,7 @@
 #include "FingerprintSensor.h"
 #include <Adafruit_Fingerprint.h>
 #include <SoftwareSerial.h>
+#include "StatusLeds/StatusLeds.h"
 
 FingerprintSensor::FingerprintSensor()
 : serial(RX, TX)
@@ -149,9 +150,12 @@ int8_t FingerprintSensor::trainModel(uint8_t n){
   }
 }
 
-/*uint8_t FingerprintSensor::fingerprintEnroll(uint8_t id) {
+uint8_t FingerprintSensor::fingerprintEnroll() {
+  finger.getTemplateCount();
+  uint8_t id = finger.templateCount;
   Serial.print("Waiting for valid finger to enroll as #"); Serial.println(id);
-  blink_both();
+  
+  StatusLeds::blinkBoth();
 
   if (wait4Finger() < 0) {
     return -1;
@@ -163,9 +167,9 @@ int8_t FingerprintSensor::trainModel(uint8_t n){
   }
   
   Serial.println("Remove finger");
-  digitalWrite(GREEN_LED, HIGH);
+  StatusLeds::on(GREEN_LED);
   delay(1000);
-  blink_both();
+  StatusLeds::blinkBoth();
 
   int p = 0;
   while (p != FINGERPRINT_NOFINGER) {
@@ -201,9 +205,9 @@ int8_t FingerprintSensor::trainModel(uint8_t n){
   p = finger.storeModel(id);
   if (p == FINGERPRINT_OK) {
     Serial.println("Stored!");
-    digitalWrite(GREEN_LED, HIGH);
+    StatusLeds::on(GREEN_LED);
     delay(1000);
-    digitalWrite(GREEN_LED, LOW);
+    StatusLeds::off(GREEN_LED);
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
     return p;
@@ -217,7 +221,7 @@ int8_t FingerprintSensor::trainModel(uint8_t n){
     Serial.println("Unknown error");
     return p;
   }   
-}*/
+}
 
 uint8_t FingerprintSensor::deleteFingerprint(uint8_t id) {
   uint8_t p = -1;

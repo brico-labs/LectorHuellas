@@ -2,40 +2,14 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include "config/password.h"
+#include "StatusLeds/StatusLeds.h"
 
-
-const short RED_LED = D6;
-const short GREEN_LED = D7;
 const short DOOR = D2;
 const short BUZZER = D5;
 
 FingerprintSensor fingerSensor;
 WiFiClient wifiClient;
 PubSubClient client(wifiClient);
-
-
-/*void blink_both(){
-  digitalWrite(GREEN_LED, LOW);
-  digitalWrite(RED_LED, LOW);
-  delay(200);
-  digitalWrite(GREEN_LED, HIGH);
-  digitalWrite(RED_LED, HIGH);
-  delay(200);
-  digitalWrite(GREEN_LED, LOW);
-  digitalWrite(RED_LED, LOW);
-  delay(200);
-  digitalWrite(GREEN_LED, HIGH);
-  digitalWrite(RED_LED, HIGH);
-  delay(200);
-  digitalWrite(GREEN_LED, LOW);
-  digitalWrite(RED_LED, LOW);
-  delay(200);
-  digitalWrite(GREEN_LED, HIGH);
-  digitalWrite(RED_LED, HIGH);
-  delay(200);
-  digitalWrite(GREEN_LED, LOW);
-  digitalWrite(RED_LED, LOW);
-}*/
 
 void open() {
   digitalWrite(DOOR, HIGH);
@@ -48,10 +22,15 @@ void open() {
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  String targetTopic = String("lock/") + ID + "/cmd";
-  if (!strcmp(topic, targetTopic.c_str())) {
+  String topicOpen = String("lock/") + ID + "/cmd/open";
+  String topicAdd = String("lock/") + ID + "/cmd/add";
+  if (!strcmp(topic, topicOpen.c_str())) {
     Serial.println("Opening from MQTT Command");
     open();
+  } 
+  else if (!strcmp(topic, topicAdd.c_str())) {
+    Serial.println("Adding new fingerprint to the system");
+    fingerSensor.fingerprintEnroll();
   }
 
   Serial.print("Message arrived [");
@@ -73,24 +52,23 @@ void reconnect() {
 
   if (client.connect(ID, MQTT_USER, MQTT_PASSWORD)) {
     Serial.println("MQTT connected");
-    String targetTopic = String("lock/") + ID + "/cmd";
-    client.subscribe(targetTopic.c_str());
+    String topicOpen = String("lock/") + ID + "/cmd/open";
+    String topicAdd = String("lock/") + ID + "/cmd/add";
+    client.subscribe(topicOpen.c_str());
+    client.subscribe(topicAdd.c_str());
   } 
   else {
     Serial.println("MQTT Connection failed");
   }
 }
 
-
 void setup()
 {
   Serial.begin(115200);
   delay(100);
   fingerSensor.begin();
-
+  StatusLeds::begin();
   pinMode(D5, INPUT_PULLUP);
-  pinMode(GREEN_LED, OUTPUT);
-  pinMode(RED_LED, OUTPUT);
   pinMode(DOOR, OUTPUT);
   pinMode(BUZZER, OUTPUT);
 
@@ -115,7 +93,7 @@ void loop()
 {
   int code = fingerSensor.getFingerprintID();
 
-  if (code >= 0) {
+  if (code >= 0) { // Fingerprint found
     if (client.connected()) {
       String topic = String("lock/") + ID + "/open";
       char payload[3] = "";
@@ -128,8 +106,8 @@ void loop()
 
     open();
   }
-  else if (code == -2) {
-    digitalWrite(RED_LED, HIGH);
+  else if (code == -2) { // Fingeprint not found
+    StatusLeds::on(RED_LED);
     for (int i = 0; i < 4; i++) {
       digitalWrite(BUZZER, HIGH);
       delay(100);
@@ -137,29 +115,13 @@ void loop()
       delay(100);
     }
     delay(200);
-    digitalWrite(RED_LED, LOW);
+    StatusLeds::off(RED_LED);
   }
 
-  if (!client.connected()) {
+  if (!client.connected()) { // Reconnect to MQTT if necesary
     reconnect();
   }
 
-  client.loop();
-
-  /*if (!code) {
-    Serial.print("Fingerprint id: ");
-    Serial.println(finger.fingerID);
-    if (digitalRead(D5) == LOW && finger.fingerID < 2) {
-        finger.getTemplateCount();
-        fingerprintEnroll(finger.templateCount);
-    }
-    else {
-      digitalWrite(DOOR, HIGH);
-      digitalWrite(GREEN_LED, HIGH);
-      delay(1000);
-      digitalWrite(GREEN_LED, LOW);
-      digitalWrite(DOOR, LOW);
-    }
-  } */
+  client.loop(); // MQTT update
 }
 
