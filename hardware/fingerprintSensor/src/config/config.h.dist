@@ -6,3 +6,5 @@ const char* WIFI_PASSWORD = "password";
 
 const char* MQTT_USER = "user";
 const char* MQTT_PASSWORD = "password";
+
+const char* MQTT_ADDR = "192.168.1.238";

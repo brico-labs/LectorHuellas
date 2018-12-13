@@ -1,7 +1,7 @@
 #include "FingerprintSensor/FingerprintSensor.h"
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-#include "config/password.h"
+#include "config/config.h"
 #include "StatusLeds/StatusLeds.h"
 
 const short DOOR = D2;
@@ -22,8 +22,8 @@ void open() {
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  String topicOpen = String("lock/") + ID + "/cmd/open";
-  String topicAdd = String("lock/") + ID + "/cmd/add";
+  String topicOpen = String("/cmdn/lock/") + ID + "/open";
+  String topicAdd = String("/cmdn/lock/") + ID + "/add";
   if (!strcmp(topic, topicOpen.c_str())) {
     Serial.println("Opening from MQTT Command");
     open();
@@ -52,8 +52,8 @@ void reconnect() {
 
   if (client.connect(ID, MQTT_USER, MQTT_PASSWORD)) {
     Serial.println("MQTT connected");
-    String topicOpen = String("lock/") + ID + "/cmd/open";
-    String topicAdd = String("lock/") + ID + "/cmd/add";
+    String topicOpen = String("/cmdn/lock/") + ID + "/open";
+    String topicAdd = String("/cmdn/lock/") + ID + "/add";
     client.subscribe(topicOpen.c_str());
     client.subscribe(topicAdd.c_str());
   } 
@@ -84,7 +84,7 @@ void setup()
 
   Serial.println("Connected to network!");
 
-  client.setServer("tfm.4m1g0.com", 1883);
+  client.setServer(MQTT_ADDR, 1883);
   client.setCallback(callback);
   delay(100);
 }
@@ -95,7 +95,7 @@ void loop()
 
   if (code >= 0) { // Fingerprint found
     if (client.connected()) {
-      String topic = String("lock/") + ID + "/open";
+      String topic = String("/tele/lock/") + ID + "/open";
       char payload[3] = "";
       itoa(code,payload, 10);
       client.publish(topic.c_str(), payload);
