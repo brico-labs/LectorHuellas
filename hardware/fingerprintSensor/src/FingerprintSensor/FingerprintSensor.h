@@ -6,7 +6,8 @@ public:
   FingerprintSensor();
   void begin();
   int8_t getFingerprintID();
-  uint8_t fingerprintEnroll();
+  int8_t fingerprintEnroll();
+  uint8_t deleteFinger(uint16_t id);
 
 
 private:

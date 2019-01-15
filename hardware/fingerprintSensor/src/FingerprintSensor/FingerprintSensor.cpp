@@ -34,7 +34,7 @@ int8_t FingerprintSensor::getFingerprintID() {
       //Serial.println("No finger detected");
       return -1;
     case FINGERPRINT_PACKETRECIEVEERR:
-      Serial.println("Communication error");
+      //Serial.println("Communication error");
       return -1;
     case FINGERPRINT_IMAGEFAIL:
       Serial.println("Imaging error");
@@ -55,7 +55,7 @@ int8_t FingerprintSensor::getFingerprintID() {
       Serial.println("Image too messy");
       return -1;
     case FINGERPRINT_PACKETRECIEVEERR:
-      Serial.println("Communication error");
+      //Serial.println("Communication error");
       return -1;
     case FINGERPRINT_FEATUREFAIL:
       Serial.println("Could not find fingerprint features");
@@ -73,7 +73,7 @@ int8_t FingerprintSensor::getFingerprintID() {
   if (p == FINGERPRINT_OK) {
     Serial.println("Found a print match!");
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
-    Serial.println("Communication error");
+    //Serial.println("Communication error");
     return -1;
   } else if (p == FINGERPRINT_NOTFOUND) {
     Serial.println("Did not find a match");
@@ -94,34 +94,54 @@ int8_t FingerprintSensor::wait4Finger(){
   int p = -1;
   int seconds = 0;
   long init_time = millis();
+  bool ledStatus = 0;
 
   while (p != FINGERPRINT_OK) {
     long current_time = millis();
     p = finger.getImage();
+
     switch (p) {
       case FINGERPRINT_OK:
         Serial.println("\nImage taken");
         break;
       case FINGERPRINT_NOFINGER:
-        if ((current_time - init_time) > 1000) {
-          init_time = current_time;
-          Serial.print(".");
-          seconds++;
-          if (seconds > 20) {
-            Serial.println("\nTimeout.");
-            return -1;
+        if ((current_time - init_time) > 500) {
+          if (ledStatus){
+            StatusLeds::on(GREEN_LED);
+            StatusLeds::on(RED_LED);
+            seconds++;
           }
+          else {
+            StatusLeds::off(GREEN_LED);
+            StatusLeds::off(RED_LED);
+          }
+          
+          ledStatus = !ledStatus;
+          init_time = current_time;
+        }
+
+        if (seconds > 10) {
+          Serial.println("\nTimeout.");
+          StatusLeds::off(GREEN_LED);
+          StatusLeds::off(RED_LED);
+          return -1;
         }
         continue;
       case FINGERPRINT_PACKETRECIEVEERR:
-        Serial.println("\nCommunication error");
-        return -2;
+        StatusLeds::off(GREEN_LED);
+        StatusLeds::off(RED_LED);
+        //Serial.println("\nCommunication error");
+        continue;
       case FINGERPRINT_IMAGEFAIL:
+        StatusLeds::off(GREEN_LED);
+        StatusLeds::off(RED_LED);
         Serial.println("\nImaging error");
         return -3;
       default:
+        StatusLeds::off(GREEN_LED);
+        StatusLeds::off(RED_LED);
         Serial.println("\nUnknown error");
-        return -4; 
+        continue; 
     }
   }
 }
@@ -136,7 +156,7 @@ int8_t FingerprintSensor::trainModel(uint8_t n){
       Serial.println("Image too messy");
       return -1;
     case FINGERPRINT_PACKETRECIEVEERR:
-      Serial.println("Communication error");
+      //Serial.println("Communication error");
       return -2;
     case FINGERPRINT_FEATUREFAIL:
       Serial.println("Could not find fingerprint features");
@@ -150,14 +170,19 @@ int8_t FingerprintSensor::trainModel(uint8_t n){
   }
 }
 
-uint8_t FingerprintSensor::fingerprintEnroll() {
-  finger.getTemplateCount();
-  uint8_t id = finger.templateCount;
-  Serial.print("Waiting for valid finger to enroll as #"); Serial.println(id);
-  
-  StatusLeds::blinkBoth();
+int8_t FingerprintSensor::fingerprintEnroll() {
+  long init_time = millis();
+  while (!finger.getTemplateCount()){
+    if (millis() - init_time > 1000)
+      return -8;
+  }
 
-  if (wait4Finger() < 0) {
+  int8_t id = finger.templateCount;
+  Serial.println("hola1");
+  Serial.println(id);
+  Serial.print("Waiting for valid finger to enroll as #"); Serial.println(id);
+
+  if (wait4Finger() < 0) { 
     return -1;
   }
     
@@ -169,7 +194,6 @@ uint8_t FingerprintSensor::fingerprintEnroll() {
   Serial.println("Remove finger");
   StatusLeds::on(GREEN_LED);
   delay(1000);
-  StatusLeds::blinkBoth();
 
   int p = 0;
   while (p != FINGERPRINT_NOFINGER) {
@@ -208,6 +232,9 @@ uint8_t FingerprintSensor::fingerprintEnroll() {
     StatusLeds::on(GREEN_LED);
     delay(1000);
     StatusLeds::off(GREEN_LED);
+    StatusLeds::off(RED_LED);
+    Serial.println(id);
+    return id;
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
     return p;
@@ -243,4 +270,8 @@ uint8_t FingerprintSensor::deleteFingerprint(uint8_t id) {
     Serial.print("Unknown error: 0x"); Serial.println(p, HEX);
     return p;
   }   
+}
+
+uint8_t FingerprintSensor::deleteFinger(uint16_t id){
+  return finger.deleteModel(id);
 }
