@@ -7,7 +7,9 @@
 
 const short DOOR = D2;
 const short BUZZER = D5;
+const short CLOSE_SENSOR = D1;
 unsigned long lastUpdateTime = 0;
+bool doorOpen = false;
 
 FingerprintSensor fingerSensor;
 WiFiClient wifiClient;
@@ -118,6 +120,7 @@ void setup()
   pinMode(D5, INPUT_PULLUP);
   pinMode(DOOR, OUTPUT);
   pinMode(BUZZER, OUTPUT);
+  pinMode(CLOSE_SENSOR, INPUT_PULLUP);
 
   // setup wifi connection
   WiFi.mode(WIFI_STA);
@@ -125,6 +128,10 @@ void setup()
 
   while (WiFi.status() != WL_CONNECTED)
   {
+    static int i = 0;
+    i++;
+    if (i>120) // 1 min
+      ESP.restart();
     Serial.print(".");
     delay(500);
   }
@@ -134,6 +141,13 @@ void setup()
   client.setServer(MQTT_ADDR, 1883);
   client.setCallback(callback);
   delay(100);
+
+  /*while (!client.connected()) { // Reconnect to MQTT if necesary
+    static unsigned long startTime = millis();
+    if (millis() - startTime > 1000 * 60 * 2) // 2 min
+      ESP.restart();
+    reconnect();
+  }*/
 }
 
 void loop()
@@ -197,6 +211,22 @@ void loop()
       case HTTP_UPDATE_OK:
         Serial.println("HTTP_UPDATE_OK");
         break;
+    }
+  }
+
+  short open = digitalRead(CLOSE_SENSOR);
+  if (open != doorOpen) {
+    doorOpen = open;
+    if (client.connected()) {
+      String topic = String("/tele/lock/") + String(ESP.getChipId()) + "/status";
+      char payload[2] = "1";
+      if (doorOpen) 
+        client.publish(topic.c_str(), "1");
+      else
+        client.publish(topic.c_str(), "0");
+    }
+    else {
+      // TODO: we have to persist this and send log when the connection is available
     }
   }
   
