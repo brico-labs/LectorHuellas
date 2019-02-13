@@ -12,8 +12,6 @@ FingerprintSensor::FingerprintSensor()
 
 void FingerprintSensor::begin()
 {
-  Serial.println(RX);
-  Serial.println(TX);
   finger.begin(115200);
   if (finger.verifyPassword()) {
     Serial.println("Found fingerprint sensor!");
@@ -96,14 +94,16 @@ int8_t FingerprintSensor::wait4Finger(){
   long init_time = millis();
   bool ledStatus = 0;
 
-  while (p != FINGERPRINT_OK) {
+  while (true) {
     long current_time = millis();
     p = finger.getImage();
 
     switch (p) {
       case FINGERPRINT_OK:
         Serial.println("\nImage taken");
-        break;
+        StatusLeds::off(GREEN_LED);
+        StatusLeds::off(RED_LED);
+        return 0;
       case FINGERPRINT_NOFINGER:
         if ((current_time - init_time) > 500) {
           if (ledStatus){
@@ -168,19 +168,44 @@ int8_t FingerprintSensor::trainModel(uint8_t n){
       Serial.println("Unknown error");
       return -5;
   }
+
+  return 0;
 }
 
 int8_t FingerprintSensor::fingerprintEnroll() {
-  long init_time = millis();
-  while (!finger.getTemplateCount()){
-    if (millis() - init_time > 1000)
-      return -8;
-  }
+  int id = getTemplateCount();
+  if (id < 0)
+    return id;
 
-  int8_t id = finger.templateCount;
-  Serial.println("hola1");
+  int i = 0;
+  int code;
+  do {
+    code = finger.loadModel(id);
+
+    if (i > 10 || (code != 0 && code != 12)) // suspicious number of used positions or actual error
+      return -1;
+    else if (code != 12)
+      id++, i++;
+  } while (code == 0);
+
+
+  return id;//fingerprintEnroll(id);
+}
+
+int8_t FingerprintSensor::fingerprintEnroll(uint16_t id) {
+  if (id < 0) // Error obtaining the number of templates
+    return id;
+
   Serial.println(id);
   Serial.print("Waiting for valid finger to enroll as #"); Serial.println(id);
+
+  digitalWrite(BUZZER, HIGH);
+  delay(100);
+  digitalWrite(BUZZER, LOW);
+  delay(100);
+  digitalWrite(BUZZER, HIGH);
+  delay(100);
+  digitalWrite(BUZZER, LOW);
 
   if (wait4Finger() < 0) { 
     return -1;
@@ -193,7 +218,11 @@ int8_t FingerprintSensor::fingerprintEnroll() {
   
   Serial.println("Remove finger");
   StatusLeds::on(GREEN_LED);
-  delay(1000);
+  digitalWrite(BUZZER, HIGH);
+  delay(200);
+  digitalWrite(BUZZER, LOW);
+
+  delay(800);
 
   int p = 0;
   while (p != FINGERPRINT_NOFINGER) {
@@ -216,37 +245,45 @@ int8_t FingerprintSensor::fingerprintEnroll() {
     Serial.println("Prints matched!");
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
-    return p;
+    return -p;
   } else if (p == FINGERPRINT_ENROLLMISMATCH) {
     Serial.println("Fingerprints did not match");
-    return p;
+    return -p;
   } else {
     Serial.println("Unknown error");
-    return p;
+    return -p;
   }   
   
   Serial.print("ID "); Serial.println(id);
   p = finger.storeModel(id);
   if (p == FINGERPRINT_OK) {
     Serial.println("Stored!");
+
     StatusLeds::on(GREEN_LED);
+    digitalWrite(BUZZER, HIGH);
     delay(1000);
+    digitalWrite(BUZZER, LOW);
     StatusLeds::off(GREEN_LED);
     StatusLeds::off(RED_LED);
+    delay(100);
+    digitalWrite(BUZZER, HIGH);
+    delay(200);
+    digitalWrite(BUZZER, LOW);
+
     Serial.println(id);
     return id;
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
-    return p;
+    return -p;
   } else if (p == FINGERPRINT_BADLOCATION) {
     Serial.println("Could not store in that location");
-    return p;
+    return -p;
   } else if (p == FINGERPRINT_FLASHERR) {
     Serial.println("Error writing to flash");
-    return p;
+    return -p;
   } else {
     Serial.println("Unknown error");
-    return p;
+    return -p;
   }   
 }
 
@@ -270,8 +307,23 @@ uint8_t FingerprintSensor::deleteFingerprint(uint8_t id) {
     Serial.print("Unknown error: 0x"); Serial.println(p, HEX);
     return p;
   }   
+
+  return -1;
 }
 
-uint8_t FingerprintSensor::deleteFinger(uint16_t id){
+int8_t FingerprintSensor::deleteFinger(uint16_t id){
   return finger.deleteModel(id);
+}
+
+int16_t FingerprintSensor::getTemplateCount() {
+  long init_time = millis();
+  while (finger.getTemplateCount() < 0){
+    delay(100);
+    if (millis() - init_time > 2000)
+      return -8;
+  }
+  if (finger.templateCount == 0) // sometimes it returns 0 on error
+    return -1;
+
+  return finger.templateCount;
 }

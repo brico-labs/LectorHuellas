@@ -6,7 +6,6 @@
 #include <ESP8266httpUpdate.h>
 
 const short DOOR = D2;
-const short BUZZER = D5;
 const short CLOSE_SENSOR = D1;
 unsigned long lastUpdateTime = 0;
 bool doorOpen = false;
@@ -42,22 +41,44 @@ void reconnect() {
     client.subscribe(topicAdd.c_str());
     client.subscribe(topicRemove.c_str());
   } 
-  else {
+  else {  
     Serial.println("MQTT Connection failed");
   }
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
+  char payloadText[3];
   String topicOpen = String("/cmdn/lock/") + ESP.getChipId() + "/open";
   String topicAdd = String("/cmdn/lock/") + ESP.getChipId() + "/add";
   String topicRemove = String("/cmdn/lock/") + ESP.getChipId() + "/remove";
+
   if (!strcmp(topic, topicOpen.c_str())) {
     Serial.println("Opening from MQTT Command");
     open();
   } 
   else if (!strcmp(topic, topicAdd.c_str())) {
     Serial.println("Adding new fingerprint to the system");
-    int8_t id = fingerSensor.fingerprintEnroll();
+
+    if (length > 2) {
+      Serial.println("Mensaje mqtt incorrecto");
+      return;
+    }
+
+    int8_t id = 0;
+
+    if (length == 0) {
+      id = fingerSensor.fingerprintEnroll();
+    } 
+    else {
+      memcpy(payloadText, payload, length);
+      payloadText[length] = '\0';
+      id = atoi(payloadText);
+      if (id < 1 || id > 99)
+        return;
+      
+      id = fingerSensor.fingerprintEnroll(id);
+    }
+    
     Serial.print("ID: ");
     Serial.println(id);
     String topic = String("/stat/lock/") + String(ESP.getChipId()) + "/enrollingId";
@@ -81,8 +102,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
     
   }
   else if (!strcmp(topic, topicRemove.c_str())) {
-    char payloadText[3];
-
     if (length > 2) {
       Serial.println("Mensaje mqtt incorrecto");
       return;
@@ -103,7 +122,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("] ");
-  for (int i=0;i<length;i++) {
+  for (unsigned int i=0;i<length;i++) {
     Serial.print((char)payload[i]);
   }
   Serial.println();
@@ -219,7 +238,6 @@ void loop()
     doorOpen = open;
     if (client.connected()) {
       String topic = String("/tele/lock/") + String(ESP.getChipId()) + "/status";
-      char payload[2] = "1";
       if (doorOpen) 
         client.publish(topic.c_str(), "1");
       else

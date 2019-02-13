@@ -2,7 +2,8 @@
 
 enum Leds {
     RED_LED = D6,
-    GREEN_LED = D7
+    GREEN_LED = D7,
+    BUZZER = D5
 };
 
 class StatusLeds {
