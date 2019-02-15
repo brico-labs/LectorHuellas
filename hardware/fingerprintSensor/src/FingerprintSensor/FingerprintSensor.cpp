@@ -12,7 +12,7 @@ FingerprintSensor::FingerprintSensor()
 
 void FingerprintSensor::begin()
 {
-  finger.begin(115200);
+  finger.begin(57600);
   if (finger.verifyPassword()) {
     Serial.println("Found fingerprint sensor!");
   } else {

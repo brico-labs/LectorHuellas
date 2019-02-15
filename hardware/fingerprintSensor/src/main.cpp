@@ -8,6 +8,7 @@
 const short DOOR = D2;
 const short CLOSE_SENSOR = D1;
 unsigned long lastUpdateTime = 0;
+unsigned long lastTeleTime = 0;
 bool doorOpen = false;
 
 FingerprintSensor fingerSensor;
@@ -175,7 +176,7 @@ void loop()
 
   if (code >= 0) { // Fingerprint found
     if (client.connected()) {
-      String topic = String("/tele/lock/") + String(ESP.getChipId()) + "/open";
+      String topic = String("/stat/lock/") + String(ESP.getChipId()) + "/open";
       char payload[3] = "";
       itoa(code,payload, 10);
       client.publish(topic.c_str(), payload);
@@ -188,7 +189,7 @@ void loop()
   }
   else if (code == -2) { // Fingeprint not found
     if (client.connected()) {
-      String topic = String("/tele/lock/") + String(ESP.getChipId()) + "/denied";
+      String topic = String("/stat/lock/") + String(ESP.getChipId()) + "/denied";
       char payload[1] = "";
       client.publish(topic.c_str(), payload);
     }
@@ -234,10 +235,17 @@ void loop()
   }
 
   short open = digitalRead(CLOSE_SENSOR);
-  if (open != doorOpen) {
+  if (open != doorOpen || millis() - lastTeleTime > 300000 || lastTeleTime == 0) {
+    Serial.println("Send Tele");
+    lastTeleTime = millis();
+    String topic;
+    if (open != doorOpen)
+      topic = String("/stat/lock/") + String(ESP.getChipId()) + "/status";
+    else 
+      topic = String("/tele/lock/") + String(ESP.getChipId()) + "/status";
     doorOpen = open;
+
     if (client.connected()) {
-      String topic = String("/tele/lock/") + String(ESP.getChipId()) + "/status";
       if (doorOpen) 
         client.publish(topic.c_str(), "1");
       else
