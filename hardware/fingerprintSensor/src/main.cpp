@@ -4,10 +4,16 @@
 #include "config/config.h"
 #include "StatusLeds/StatusLeds.h"
 #include <ESP8266httpUpdate.h>
+#include <ArduinoJson.h>
+#include "FS.h"
+#include "Clock/Clock.h"
 
 const short DOOR = D2;
 const short CLOSE_SENSOR = D1;
+const char* QUEUE_FILENAME = "msg_queue.json";
+unsigned long lastTimeUpdate = 0;
 unsigned long lastUpdateTime = 0;
+unsigned long lastCheckQueue = 0;
 unsigned long lastTeleTime = 0;
 bool doorOpen = false;
 
@@ -133,6 +139,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 void setup()
 {
+  SPIFFS.begin();
   Serial.begin(115200);
   delay(100);
   fingerSensor.begin();
@@ -158,6 +165,14 @@ void setup()
 
   Serial.println("Connected to network!");
 
+   int i = 0;
+  while (!Clock::updateTime() && i++ < 3)
+  {
+    Serial.println("Unable to get time. ");
+    delay(500);
+  }
+  lastTimeUpdate = millis();
+
   client.setServer(MQTT_ADDR, 1883);
   client.setCallback(callback);
   delay(100);
@@ -175,14 +190,31 @@ void loop()
   int code = fingerSensor.getFingerprintID();
 
   if (code >= 0) { // Fingerprint found
+    char payload[3] = "";
+    itoa(code,payload, 10);
+
     if (client.connected()) {
+      Serial.println(Clock::getUnixTime());
       String topic = String("/stat/lock/") + String(ESP.getChipId()) + "/open";
-      char payload[3] = "";
-      itoa(code,payload, 10);
       client.publish(topic.c_str(), payload);
     }
     else {
-      // TODO: we have to persist this and send log when the connection is available
+      File file = SPIFFS.open(QUEUE_FILENAME, "a");
+      if (!file)
+      {
+        Serial.println("Error while reading config file.");
+      } else {
+        StaticJsonBuffer<200> jsonBuffer;
+        JsonObject& root = jsonBuffer.createObject();
+        root["time"] = Clock::getUnixTime();
+        root["command"] = "open";
+        root["id"] = payload;
+        root.printTo(Serial);
+        root.printTo(file);
+        file.println();
+        file.close();
+        Serial.println("Storing message in Queue");
+      }
     }
 
     open();
@@ -255,6 +287,34 @@ void loop()
       // TODO: we have to persist this and send log when the connection is available
     }
   }
+
+  // update time via NTP
+  if ((unsigned long)(millis() - lastTimeUpdate) > 1000*60*60*5)
+  {
+    Serial.println("Clock update...");
+    Clock::updateTime();
+    lastTimeUpdate = millis();
+  }
+
+  // check queue to free it
+  if ((unsigned long)(millis() - lastCheckQueue) > 1000*60) {
+    lastCheckQueue = millis();
+    File file = SPIFFS.open(QUEUE_FILENAME, "r");
+
+    if (file && client.connected())
+    {
+      Serial.print("Sending queued information.");
+      while (file.available()) {
+        String message = file.readStringUntil('\n');
+        String topic = String("/tele/lock/") + String(ESP.getChipId()) + "/old";
+        client.publish(topic.c_str(), message.c_str());
+      }
+    }
+
+    file.close();
+    SPIFFS.remove(QUEUE_FILENAME);
+  }
+  
   
 }
 
