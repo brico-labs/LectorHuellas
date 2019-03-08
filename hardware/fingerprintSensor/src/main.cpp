@@ -8,14 +8,17 @@
 #include "FS.h"
 #include "Clock/Clock.h"
 
-const short DOOR = D2;
+const short DOOR = D8;
 const short CLOSE_SENSOR = D1;
+const short PIR_SENSOR = D2;
 const char* QUEUE_FILENAME = "msg_queue.json";
 unsigned long lastTimeUpdate = 0;
 unsigned long lastUpdateTime = 0;
 unsigned long lastCheckQueue = 0;
-unsigned long lastTeleTime = 0;
+unsigned long lastOpenTeleTime = 0;
+unsigned long lastMovementTeleTime = 0;
 bool doorOpen = false;
+bool movementDetected = false;
 
 FingerprintSensor fingerSensor;
 WiFiClient wifiClient;
@@ -44,9 +47,11 @@ void reconnect() {
     String topicOpen = String("/cmdn/lock/") + String(ESP.getChipId()) + "/open";
     String topicAdd = String("/cmdn/lock/") + String(ESP.getChipId()) + "/add";
     String topicRemove = String("/cmdn/lock/") + String(ESP.getChipId()) + "/remove";
+    String topicStatus = String("/cmdn/lock/") + ESP.getChipId() + "/status";
     client.subscribe(topicOpen.c_str());
     client.subscribe(topicAdd.c_str());
     client.subscribe(topicRemove.c_str());
+    client.subscribe(topicStatus.c_str());
   } 
   else {  
     Serial.println("MQTT Connection failed");
@@ -58,6 +63,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   String topicOpen = String("/cmdn/lock/") + ESP.getChipId() + "/open";
   String topicAdd = String("/cmdn/lock/") + ESP.getChipId() + "/add";
   String topicRemove = String("/cmdn/lock/") + ESP.getChipId() + "/remove";
+  String topicStatus = String("/cmdn/lock/") + ESP.getChipId() + "/status";
 
   if (!strcmp(topic, topicOpen.c_str())) {
     Serial.println("Opening from MQTT Command");
@@ -125,6 +131,27 @@ void callback(char* topic, byte* payload, unsigned int length) {
       Serial.println(payloadText);
     }
   }
+  else if (!strcmp(topic, topicStatus.c_str())) {
+    String topic = String("/stat/lock/") + String(ESP.getChipId()) + "/STATUS5";
+
+    String reply = "{\"StatusNET\":{\"Hostname\":\"";
+    reply += WiFi.hostname();
+    reply += "\", \"IPAddress\":\"";
+    reply += WiFi.localIP();
+    reply += "\", \"Gateway\":\"";
+    reply += WiFi.gatewayIP();
+    reply += "\", \"Subnetmask\":\"";
+    reply += WiFi.subnetMask();
+    reply += "\", \"DNSServer\":\"";
+    reply += WiFi.dnsIP();
+    reply += "\", \"Mac\":\"";
+    reply += WiFi.macAddress();
+    reply += "\"}}";
+
+    if (client.connected()) {
+      client.publish(topic.c_str(), reply.c_str());
+    } 
+  }
 
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -148,6 +175,7 @@ void setup()
   pinMode(DOOR, OUTPUT);
   pinMode(BUZZER, OUTPUT);
   pinMode(CLOSE_SENSOR, INPUT_PULLUP);
+  pinMode(PIR_SENSOR, INPUT);
 
   // setup wifi connection
   WiFi.mode(WIFI_STA);
@@ -267,9 +295,9 @@ void loop()
   }
 
   short open = digitalRead(CLOSE_SENSOR);
-  if (open != doorOpen || millis() - lastTeleTime > 300000 || lastTeleTime == 0) {
+  if (open != doorOpen || millis() - lastOpenTeleTime > 300000 || lastOpenTeleTime == 0) {
     Serial.println("Send Tele");
-    lastTeleTime = millis();
+    lastOpenTeleTime = millis();
     String topic;
     if (open != doorOpen)
       topic = String("/stat/lock/") + String(ESP.getChipId()) + "/status";
@@ -279,6 +307,29 @@ void loop()
 
     if (client.connected()) {
       if (doorOpen) 
+        client.publish(topic.c_str(), "1");
+      else
+        client.publish(topic.c_str(), "0");
+    }
+    else {
+      // TODO: we have to persist this and send log when the connection is available
+    }
+  }
+
+  short movement = digitalRead(PIR_SENSOR);
+  Serial.println(movement);
+  if (movement != movementDetected || millis() - lastMovementTeleTime > 300000 || lastMovementTeleTime == 0) {
+    Serial.println("Send Tele");
+    lastMovementTeleTime = millis();
+    String topic;
+    if (movement != movementDetected)
+      topic = String("/stat/lock/") + String(ESP.getChipId()) + "/movement";
+    else 
+      topic = String("/tele/lock/") + String(ESP.getChipId()) + "/movement";
+    movementDetected = movement;
+
+    if (client.connected()) {
+      if (movementDetected) 
         client.publish(topic.c_str(), "1");
       else
         client.publish(topic.c_str(), "0");
