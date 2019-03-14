@@ -175,7 +175,7 @@ int8_t FingerprintSensor::trainModel(uint8_t n){
 int8_t FingerprintSensor::fingerprintEnroll() {
   int id = getTemplateCount();
   if (id < 0)
-    return id;
+    return -11;
 
   int i = 0;
   int code;
@@ -183,13 +183,13 @@ int8_t FingerprintSensor::fingerprintEnroll() {
     code = finger.loadModel(id);
 
     if (i > 10 || (code != 0 && code != 12)) // suspicious number of used positions or actual error
-      return -1;
+      return -11;
     else if (code != 12)
       id++, i++;
   } while (code == 0);
 
 
-  return id;//fingerprintEnroll(id);
+  return fingerprintEnroll(id);
 }
 
 int8_t FingerprintSensor::fingerprintEnroll(uint16_t id) {
@@ -208,12 +208,12 @@ int8_t FingerprintSensor::fingerprintEnroll(uint16_t id) {
   digitalWrite(BUZZER, LOW);
 
   if (wait4Finger() < 0) { 
-    return -1;
+    return -12;
   }
     
-
-  if (trainModel(1) < 0) {
-    return -1;
+  int8_t result = trainModel(1);
+  if (result < 0) {
+    return result;
   }
   
   Serial.println("Remove finger");
@@ -232,10 +232,11 @@ int8_t FingerprintSensor::fingerprintEnroll(uint16_t id) {
   Serial.println("Place same finger again");
 
   if (wait4Finger() < 0) 
-    return -1;
+    return -12;
 
-  if (trainModel(2) < 0) 
-    return -1;
+  result = trainModel(2);
+  if (result < 0) 
+    return result;
   
   // OK!
   Serial.print("Creating model for #");  Serial.println(id);
@@ -245,7 +246,7 @@ int8_t FingerprintSensor::fingerprintEnroll(uint16_t id) {
     Serial.println("Prints matched!");
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
-    return -p;
+    return -10;
   } else if (p == FINGERPRINT_ENROLLMISMATCH) {
     Serial.println("Fingerprints did not match");
     return -p;
@@ -323,7 +324,7 @@ int16_t FingerprintSensor::getTemplateCount() {
       return -8;
   }
   if (finger.templateCount == 0) // sometimes it returns 0 on error
-    return -1;
+    return -11;
 
   return finger.templateCount;
 }

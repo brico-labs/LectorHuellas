@@ -137,18 +137,20 @@ void callback(char* topic, byte* payload, unsigned int length) {
     String reply = "{\"StatusNET\":{\"Hostname\":\"";
     reply += WiFi.hostname();
     reply += "\", \"IPAddress\":\"";
-    reply += WiFi.localIP();
+    reply += WiFi.localIP().toString();
     reply += "\", \"Gateway\":\"";
-    reply += WiFi.gatewayIP();
+    reply += WiFi.gatewayIP().toString();
     reply += "\", \"Subnetmask\":\"";
-    reply += WiFi.subnetMask();
+    reply += WiFi.subnetMask().toString();
     reply += "\", \"DNSServer\":\"";
-    reply += WiFi.dnsIP();
+    reply += WiFi.dnsIP().toString();
     reply += "\", \"Mac\":\"";
     reply += WiFi.macAddress();
     reply += "\"}}";
 
     if (client.connected()) {
+       Serial.println(topic);
+       Serial.println(reply);
       client.publish(topic.c_str(), reply.c_str());
     } 
   }
@@ -232,13 +234,12 @@ void loop()
       {
         Serial.println("Error while reading config file.");
       } else {
-        StaticJsonBuffer<200> jsonBuffer;
-        JsonObject& root = jsonBuffer.createObject();
+        StaticJsonDocument<200> root;
         root["time"] = Clock::getUnixTime();
         root["command"] = "open";
         root["id"] = payload;
-        root.printTo(Serial);
-        root.printTo(file);
+        serializeJson(root, Serial);
+        serializeJson(root, file);
         file.println();
         file.close();
         Serial.println("Storing message in Queue");
@@ -317,7 +318,6 @@ void loop()
   }
 
   short movement = digitalRead(PIR_SENSOR);
-  Serial.println(movement);
   if (movement != movementDetected || millis() - lastMovementTeleTime > 300000 || lastMovementTeleTime == 0) {
     Serial.println("Send Tele");
     lastMovementTeleTime = millis();
