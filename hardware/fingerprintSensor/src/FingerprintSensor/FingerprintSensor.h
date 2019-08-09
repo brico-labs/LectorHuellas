@@ -10,6 +10,7 @@ public:
   int8_t fingerprintEnroll(uint16_t id);
   int8_t deleteFinger(uint16_t id);
   int16_t getTemplateCount();
+  uint8_t downloadFingerprintTemplate(uint16_t id, uint8_t* fingerTemplate);
 
 
 private:

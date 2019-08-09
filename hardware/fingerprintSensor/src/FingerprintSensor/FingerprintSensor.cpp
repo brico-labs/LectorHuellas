@@ -328,3 +328,66 @@ int16_t FingerprintSensor::getTemplateCount() {
 
   return finger.templateCount;
 }
+
+uint8_t FingerprintSensor::downloadFingerprintTemplate(uint16_t id, uint8_t* fingerTemplate)
+{
+  Serial.println("------------------------------------");
+  Serial.print("Attempting to load #"); Serial.println(id);
+  uint8_t p = finger.loadModel(id);
+  switch (p) {
+    case FINGERPRINT_OK:
+      Serial.print("Template "); Serial.print(id); Serial.println(" loaded");
+      break;
+    case FINGERPRINT_PACKETRECIEVEERR:
+      Serial.println("Communication error");
+      return p;
+    default:
+      Serial.print("Unknown error "); Serial.println(p);
+      return p;
+  }
+
+  // OK success!
+
+  Serial.print("Attempting to get #"); Serial.println(id);
+  p = finger.getModel();
+  switch (p) {
+    case FINGERPRINT_OK:
+      Serial.print("Template "); Serial.print(id); Serial.println(" transferring:");
+      break;
+   default:
+      Serial.print("Unknown error "); Serial.println(p);
+      return p;
+  }
+  
+  // one data packet is 267 bytes. in one data packet, 11 bytes are 'usesless' :D
+  uint8_t bytesReceived[534]; // 2 data packets
+  memset(bytesReceived, 0xff, 534);
+
+  uint32_t starttime = millis();
+  int i = 0;
+  while (i < 534 && (millis() - starttime) < 20000) {
+      if (serial.available()) {
+          bytesReceived[i++] = serial.read();
+      }
+  }
+  Serial.print(i); Serial.println(" bytes read.");
+  Serial.println("Decoding packet...");
+
+  memset(fingerTemplate, 0xff, 512);
+
+  // filtering only the data packets
+  int uindx = 9, index = 0;
+  while (index < 534) {
+      while (index < uindx) ++index;
+      uindx += 256;
+      while (index < uindx) {
+          fingerTemplate[index++] = bytesReceived[index];
+      }
+      uindx += 2;
+      while (index < uindx) ++index;
+      uindx = index + 9;
+  }
+  
+  return 0;
+}
+

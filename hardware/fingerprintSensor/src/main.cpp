@@ -48,14 +48,28 @@ void reconnect() {
     String topicAdd = String("/cmdn/lock/") + String(ESP.getChipId()) + "/add";
     String topicRemove = String("/cmdn/lock/") + String(ESP.getChipId()) + "/remove";
     String topicStatus = String("/cmdn/lock/") + ESP.getChipId() + "/status";
+    String topicDownload = String("/cmdn/lock/") + ESP.getChipId() + "/download";
+    String topicUpload = String("/cmdn/lock/") + ESP.getChipId() + "/upload";
     client.subscribe(topicOpen.c_str());
     client.subscribe(topicAdd.c_str());
     client.subscribe(topicRemove.c_str());
     client.subscribe(topicStatus.c_str());
+    client.subscribe(topicDownload.c_str());
+    client.subscribe(topicUpload.c_str());
   } 
   else {  
     Serial.println("MQTT Connection failed");
   }
+}
+
+void printHex(int num, int precision) {
+    char tmp[16];
+    char format[128];
+ 
+    sprintf(format, "%%.%dX", precision);
+ 
+    sprintf(tmp, format, num);
+    Serial.print(tmp);
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -64,6 +78,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
   String topicAdd = String("/cmdn/lock/") + ESP.getChipId() + "/add";
   String topicRemove = String("/cmdn/lock/") + ESP.getChipId() + "/remove";
   String topicStatus = String("/cmdn/lock/") + ESP.getChipId() + "/status";
+  String topicDownload = String("/cmdn/lock/") + ESP.getChipId() + "/download";
+  String topicUpload = String("/cmdn/lock/") + ESP.getChipId() + "/upload";
 
   if (!strcmp(topic, topicOpen.c_str())) {
     Serial.println("Opening from MQTT Command");
@@ -153,6 +169,38 @@ void callback(char* topic, byte* payload, unsigned int length) {
        Serial.println(reply);
       client.publish(topic.c_str(), reply.c_str());
     } 
+  }
+  else if (!strcmp(topic, topicDownload.c_str())) {
+    if (length > 2) {
+      Serial.println("Mensaje mqtt incorrecto");
+      return;
+    }
+
+    memcpy(payloadText, payload, length);
+    payloadText[length] = '\0';
+    uint8_t fingerTemplate[512];
+    if (!fingerSensor.downloadFingerprintTemplate(atoi(payloadText), fingerTemplate)) {
+      Serial.print("Huella Descargada: ");
+      Serial.println(payloadText);
+
+      for (int i = 0; i < 512; ++i) {
+        printHex(fingerTemplate[i], 2);
+      }
+      String topic = String("/stat/lock/") + String(ESP.getChipId()) + "/enrollingHash";
+      if (client.connected()) {
+        Serial.println("\npublishing hash in mqtt.");
+        client.publish((topic + "1").c_str(), fingerTemplate, 128);
+        client.publish((topic + "2").c_str(), &fingerTemplate[128], 128);
+      }
+      Serial.println("\ndone.");
+    } 
+    else {
+      Serial.print("Hubo un error al descargar la huella: ");
+      Serial.println(payloadText);
+    }
+  }
+  else if (!strcmp(topic, topicUpload.c_str())) {
+
   }
 
   Serial.print("Message arrived [");
